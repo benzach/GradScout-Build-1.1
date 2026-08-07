@@ -1,0 +1,179 @@
+"""
+Tests for self-hosted authentication: password hashing and access
+tokens (app/security.py), the get_current_user dependency (app/auth.py),
+and the signup/login endpoints (app/routers/auth.py).
+
+Replaces the old Supabase-JWKS test suite entirely — there's no
+external identity provider left to simulate, so these tests exercise
+the real mechanism directly rather than mocking a network call.
+"""
+import os
+
+os.environ.setdefault("JWT_SECRET_KEY", "test-secret-do-not-use-in-production")
+
+import time
+from uuid import uuid4
+
+import jwt
+import pytest
+from fastapi import HTTPException
+from fastapi.security import HTTPAuthorizationCredentials
+from fastapi.testclient import TestClient
+
+from app.auth import get_current_user
+from app.db import get_session
+from app.main import app
+from app.models import User
+from app.security import (
+    create_access_token,
+    decode_access_token,
+    hash_password,
+    verify_password,
+)
+
+client = TestClient(app)
+
+
+@pytest.fixture
+def session():
+    s = get_session()
+    s.query(User).delete()
+    s.commit()
+    yield s
+    s.close()
+
+
+class TestPasswordHashing:
+    def test_correct_password_verifies(self):
+        hashed = hash_password("correct-horse-battery-staple")
+        assert verify_password("correct-horse-battery-staple", hashed)
+
+    def test_wrong_password_rejected(self):
+        hashed = hash_password("correct-horse-battery-staple")
+        assert not verify_password("wrong-password", hashed)
+
+    def test_empty_stored_hash_never_matches(self):
+        """The migration default for pre-existing rows — must never verify as a match."""
+        assert not verify_password("anything", "")
+
+    def test_two_hashes_of_same_password_differ(self):
+        """Confirms real per-hash salting, not a deterministic/broken shortcut."""
+        assert hash_password("same-password") != hash_password("same-password")
+
+
+class TestAccessTokens:
+    def test_round_trip(self):
+        user_id = uuid4()
+        token = create_access_token(user_id)
+        assert decode_access_token(token) == user_id
+
+    def test_expired_token_rejected(self):
+        from app.security import JWT_ALGORITHM, JWT_SECRET_KEY, ExpiredTokenError
+
+        now = int(time.time())
+        expired = jwt.encode(
+            {"sub": str(uuid4()), "iat": now - 100, "exp": now - 50},
+            JWT_SECRET_KEY, algorithm=JWT_ALGORITHM,
+        )
+        with pytest.raises(ExpiredTokenError):
+            decode_access_token(expired)
+
+    def test_token_signed_with_wrong_secret_rejected(self):
+        from app.security import JWT_ALGORITHM, InvalidTokenError
+
+        now = int(time.time())
+        forged = jwt.encode(
+            {"sub": str(uuid4()), "iat": now, "exp": now + 3600},
+            "not-the-real-secret", algorithm=JWT_ALGORITHM,
+        )
+        with pytest.raises(InvalidTokenError):
+            decode_access_token(forged)
+
+    def test_token_missing_subject_claim_rejected(self):
+        from app.security import JWT_ALGORITHM, JWT_SECRET_KEY, InvalidTokenError
+
+        now = int(time.time())
+        no_sub = jwt.encode({"iat": now, "exp": now + 3600}, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
+        with pytest.raises(InvalidTokenError):
+            decode_access_token(no_sub)
+
+
+class TestGetCurrentUser:
+    def test_valid_token_for_existing_user_succeeds(self, session):
+        user = User(email="real@example.com", password_hash=hash_password("whatever123"))
+        session.add(user)
+        session.commit()
+
+        token = create_access_token(user.id)
+        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+        result = get_current_user(credentials=creds, session=session)
+
+        assert result.id == user.id
+        assert result.email == "real@example.com"
+
+    def test_token_for_nonexistent_user_rejected(self, session):
+        """
+        Deliberately different from the old Supabase-backed behaviour,
+        which auto-provisioned a row on first sight of a valid token
+        (necessary there, since Supabase managed identity separately
+        from this app's own `users` table). Now GradScout only ever
+        issues a token for a user that already has a row (see
+        routers/auth.py), so a well-signed token with no matching row
+        means the account was deleted after the token was issued —
+        correctly rejected, not silently re-created.
+        """
+        token = create_access_token(uuid4())
+        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials=token)
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_user(credentials=creds, session=session)
+        assert exc_info.value.status_code == 401
+
+    def test_malformed_token_rejected(self, session):
+        creds = HTTPAuthorizationCredentials(scheme="Bearer", credentials="not-a-real-jwt")
+        with pytest.raises(HTTPException) as exc_info:
+            get_current_user(credentials=creds, session=session)
+        assert exc_info.value.status_code == 401
+
+
+class TestSignupEndpoint:
+    def test_signup_creates_account_and_returns_working_token(self, session):
+        r = client.post("/auth/signup", json={"email": "new@example.com", "password": "at-least-8-chars"})
+        assert r.status_code == 201
+        body = r.json()
+        assert body["user"]["email"] == "new@example.com"
+        assert body["token_type"] == "bearer"
+
+        r2 = client.get("/criteria", headers={"Authorization": f"Bearer {body['access_token']}"})
+        assert r2.status_code == 200
+
+    def test_duplicate_email_rejected(self, session):
+        client.post("/auth/signup", json={"email": "dupe@example.com", "password": "at-least-8-chars"})
+        r = client.post("/auth/signup", json={"email": "dupe@example.com", "password": "different-pass"})
+        assert r.status_code == 400
+
+    def test_short_password_rejected(self, session):
+        r = client.post("/auth/signup", json={"email": "short@example.com", "password": "short"})
+        assert r.status_code == 422  # pydantic min_length=8, before this ever reaches the DB
+
+    def test_password_never_stored_in_plaintext(self, session):
+        client.post("/auth/signup", json={"email": "plain@example.com", "password": "at-least-8-chars"})
+        user = session.query(User).filter_by(email="plain@example.com").first()
+        assert user.password_hash != "at-least-8-chars"
+        assert user.password_hash.startswith("$2")  # bcrypt's own format prefix
+
+
+class TestLoginEndpoint:
+    def test_correct_credentials_succeed(self, session):
+        client.post("/auth/signup", json={"email": "login@example.com", "password": "correct-password"})
+        r = client.post("/auth/login", json={"email": "login@example.com", "password": "correct-password"})
+        assert r.status_code == 200
+        assert "access_token" in r.json()
+
+    def test_wrong_password_rejected(self, session):
+        client.post("/auth/signup", json={"email": "login2@example.com", "password": "correct-password"})
+        r = client.post("/auth/login", json={"email": "login2@example.com", "password": "wrong-password"})
+        assert r.status_code == 401
+
+    def test_nonexistent_email_rejected(self, session):
+        r = client.post("/auth/login", json={"email": "nobody@example.com", "password": "whatever123"})
+        assert r.status_code == 401

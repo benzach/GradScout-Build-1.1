@@ -1,0 +1,55 @@
+"""
+Signup and login — GradScout's own account creation and authentication,
+replacing Supabase Auth (see app/security.py and app/auth.py for why).
+
+Deliberately minimal for a closed test-phase rollout: no email
+verification step and no password-reset flow. Both are real gaps for a
+public launch, but for ~20 testers you already know personally, that's
+the right tradeoff — building a transactional email flow (which needs
+its own third-party service, e.g. Resend or Postmark, meaning yet
+another account to manage) isn't worth doing before a single real user
+depends on it. Flagged explicitly here rather than silently skipped, so
+it's a deliberate decision to revisit before a wider launch, not a gap
+someone finds by accident later.
+"""
+from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.orm import Session
+
+from app.auth import get_db
+from app.models import User
+from app.schemas import LoginRequest, SignupRequest, TokenResponse, UserOut
+from app.security import create_access_token, hash_password, verify_password
+
+router = APIRouter(prefix="/auth", tags=["auth"])
+
+
+@router.post("/signup", response_model=TokenResponse, status_code=201)
+def signup(body: SignupRequest, session: Session = Depends(get_db)):
+    existing = session.query(User).filter_by(email=body.email).first()
+    if existing:
+        # Deliberately vague — confirming "that email is already
+        # registered" to an unauthenticated caller is a minor
+        # account-enumeration leak. Not a serious risk for a 21-person
+        # closed test, but free to avoid, so it's avoided.
+        raise HTTPException(status_code=400, detail="Could not create an account with those details")
+
+    user = User(email=body.email, password_hash=hash_password(body.password))
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+
+    token = create_access_token(user.id)
+    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+
+
+@router.post("/login", response_model=TokenResponse)
+def login(body: LoginRequest, session: Session = Depends(get_db)):
+    user = session.query(User).filter_by(email=body.email).first()
+    if not user or not verify_password(body.password, user.password_hash):
+        # Same response whether the email doesn't exist or the
+        # password is wrong — distinguishing the two tells an attacker
+        # which emails are registered accounts.
+        raise HTTPException(status_code=401, detail="Incorrect email or password")
+
+    token = create_access_token(user.id)
+    return TokenResponse(access_token=token, user=UserOut.model_validate(user))
