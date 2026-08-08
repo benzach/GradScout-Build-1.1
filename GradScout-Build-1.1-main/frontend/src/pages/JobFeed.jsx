@@ -1,26 +1,30 @@
 import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { Star } from 'lucide-react'
 import { api } from '../lib/api'
 import { timeAgo } from '../lib/time'
 
 const PAGE_SIZE = 20
 
-// Maps directly onto MatchStatus (backend/app/schemas.py) — "All" is the
-// one case with no status param at all, so it's the only tab where a
-// dismissed match still shows up (visually de-emphasized in JobCard
-// below, rather than hidden, so "All" really does mean all).
+// Each tab maps to a distinct combination of query params sent to
+// GET /feed. "Favourites" and "status" are independent filters on the
+// backend (see app/models.py's UserJobMatch.is_favourite) — a
+// dismissed job can still be a favourite — but the tabs themselves
+// stay mutually exclusive here, since showing two active filters at
+// once in this small a UI would be more confusing than useful.
 const FILTERS = [
-  { status: null, label: 'All' },
-  { status: 'new', label: 'New' },
-  { status: 'applied', label: 'Applied' },
-  { status: 'dismissed', label: 'Dismissed' },
+  { key: 'all', label: 'All', status: null, favouritesOnly: false },
+  { key: 'new', label: 'New', status: 'new', favouritesOnly: false },
+  { key: 'applied', label: 'Applied', status: 'applied', favouritesOnly: false },
+  { key: 'dismissed', label: 'Dismissed', status: 'dismissed', favouritesOnly: false },
+  { key: 'favourites', label: '★ Favourites', status: null, favouritesOnly: true },
 ]
 
 export default function JobFeed() {
   const [items, setItems] = useState([])
   const [total, setTotal] = useState(0)
   const [offset, setOffset] = useState(0)
-  const [filter, setFilter] = useState(null)
+  const [activeFilter, setActiveFilter] = useState(FILTERS[0])
   const [loading, setLoading] = useState(true)
   const [loadingMore, setLoadingMore] = useState(false)
   const [error, setError] = useState('')
@@ -31,8 +35,11 @@ export default function JobFeed() {
       replace ? setLoading(true) : setLoadingMore(true)
       setError('')
       try {
-        const statusParam = filter ? `&status=${filter}` : ''
-        const data = await api.get(`/feed?limit=${PAGE_SIZE}&offset=${nextOffset}${statusParam}`)
+        const params = new URLSearchParams({ limit: PAGE_SIZE, offset: nextOffset })
+        if (activeFilter.status) params.set('status', activeFilter.status)
+        if (activeFilter.favouritesOnly) params.set('favourites_only', 'true')
+
+        const data = await api.get(`/feed?${params}`)
         setItems((prev) => (replace ? data.items : [...prev, ...data.items]))
         setTotal(data.total)
         setOffset(nextOffset)
@@ -43,12 +50,24 @@ export default function JobFeed() {
         setLoadingMore(false)
       }
     },
-    [filter],
+    [activeFilter],
   )
 
   useEffect(() => {
     load(0, true)
   }, [load])
+
+  function handleToggleFavourite(matchId, nextValue) {
+    // Optimistic update — a favourite toggle should feel instant, and
+    // a failure here is rare enough (and low-stakes enough) that
+    // rolling back on error is simpler and more honest than pretending
+    // this needs a loading spinner.
+    setItems((prev) => prev.map((m) => (m.id === matchId ? { ...m, is_favourite: nextValue } : m)))
+    api.patch(`/matches/${matchId}`, { is_favourite: nextValue }).catch(() => {
+      setItems((prev) => prev.map((m) => (m.id === matchId ? { ...m, is_favourite: !nextValue } : m)))
+      setError('Could not update that — please try again.')
+    })
+  }
 
   const hasMore = offset + PAGE_SIZE < total
 
@@ -65,10 +84,10 @@ export default function JobFeed() {
         <div className="flex gap-2 mb-5 overflow-x-auto pb-1">
           {FILTERS.map((f) => (
             <button
-              key={f.label}
-              onClick={() => setFilter(f.status)}
+              key={f.key}
+              onClick={() => setActiveFilter(f)}
               className={`text-sm px-3 py-1.5 rounded-full border whitespace-nowrap transition-colors ${
-                filter === f.status
+                activeFilter.key === f.key
                   ? 'bg-brand-950 border-brand-950 text-white'
                   : 'bg-white border-slate-200 text-slate-600'
               }`}
@@ -85,15 +104,22 @@ export default function JobFeed() {
         ) : items.length === 0 ? (
           <div className="bg-white rounded-2xl shadow-sm p-6 text-center">
             <p className="text-sm text-slate-500">
-              {filter === null
+              {activeFilter.key === 'all'
                 ? 'No matches yet — check back soon, or widen your search criteria.'
-                : 'Nothing here yet.'}
+                : activeFilter.key === 'favourites'
+                  ? "You haven't favourited anything yet."
+                  : 'Nothing here yet.'}
             </p>
           </div>
         ) : (
           <div className="space-y-3">
             {items.map((match) => (
-              <JobCard key={match.id} match={match} onOpen={() => navigate(`/jobs/${match.id}`)} />
+              <JobCard
+                key={match.id}
+                match={match}
+                onOpen={() => navigate(`/jobs/${match.id}`)}
+                onToggleFavourite={(next) => handleToggleFavourite(match.id, next)}
+              />
             ))}
           </div>
         )}
@@ -112,8 +138,8 @@ export default function JobFeed() {
   )
 }
 
-function JobCard({ match, onOpen }) {
-  const { job, status } = match
+function JobCard({ match, onOpen, onToggleFavourite }) {
+  const { job, status, is_favourite: isFavourite } = match
   const isDismissed = status === 'dismissed'
   const meta = [
     job.location_category || job.location,
@@ -122,25 +148,47 @@ function JobCard({ match, onOpen }) {
     timeAgo(job.posted_date || job.first_seen_at),
   ].filter(Boolean)
 
+  // A <div role="button"> rather than a real <button> for the outer
+  // card, since it needs to contain the favourite toggle's own real
+  // <button> — nesting interactive elements is invalid HTML, and two
+  // browsers will actually handle a nested button/button click
+  // differently, not just look wrong.
   return (
-    <button
+    <div
+      role="button"
+      tabIndex={0}
       onClick={onOpen}
-      className={`w-full bg-white rounded-2xl shadow-sm p-4 text-left hover:shadow-md transition-shadow ${
+      onKeyDown={(e) => (e.key === 'Enter' || e.key === ' ') && onOpen()}
+      className={`w-full bg-white rounded-2xl shadow-sm p-4 text-left hover:shadow-md transition-shadow cursor-pointer ${
         isDismissed ? 'opacity-50' : ''
       }`}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
+        <div className="min-w-0 flex-1">
           <p className={`text-sm font-medium text-slate-900 truncate ${isDismissed ? 'line-through' : ''}`}>
             {job.title}
           </p>
           <p className="text-xs text-slate-500 mt-0.5">{job.company}</p>
         </div>
-        {status !== 'new' && (
-          <span className="shrink-0 text-[10px] uppercase tracking-wide font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full">
-            {status}
-          </span>
-        )}
+        <div className="flex items-center gap-1.5 shrink-0">
+          {status !== 'new' && (
+            <span className="text-[10px] uppercase tracking-wide font-medium text-brand-700 bg-brand-50 px-2 py-0.5 rounded-full">
+              {status}
+            </span>
+          )}
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation()
+              onToggleFavourite(!isFavourite)
+            }}
+            aria-label={isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+            aria-pressed={isFavourite}
+            className="p-1 -m-1 text-slate-300 hover:text-brand-500 transition-colors"
+          >
+            <Star size={18} fill={isFavourite ? 'currentColor' : 'none'} className={isFavourite ? 'text-brand-500' : ''} />
+          </button>
+        </div>
       </div>
 
       {meta.length > 0 && <p className="text-xs text-slate-400 mt-2">{meta.join(' · ')}</p>}
@@ -152,8 +200,10 @@ function JobCard({ match, onOpen }) {
       )}
 
       {job.sources.length > 1 && (
-        <p className="text-[11px] text-slate-400 mt-2">Also found on {job.sources.length - 1} other site{job.sources.length > 2 ? 's' : ''}</p>
+        <p className="text-[11px] text-slate-400 mt-2">
+          Also found on {job.sources.length - 1} other site{job.sources.length > 2 ? 's' : ''}
+        </p>
       )}
-    </button>
+    </div>
   )
 }

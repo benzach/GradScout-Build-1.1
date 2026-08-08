@@ -30,7 +30,7 @@ from app.auth import get_current_user, get_db
 from app.matching import compute_and_materialize_matches
 from app.models import SearchCriteria, User, UserJobMatch
 from app.routers.criteria import _get_owned_criteria
-from app.schemas import MatchOut, MatchStatus, MatchStatusUpdate, PaginatedFeed
+from app.schemas import MatchOut, MatchStatus, MatchUpdate, PaginatedFeed
 
 router = APIRouter(tags=["jobs"])
 
@@ -41,6 +41,7 @@ def get_feed(
     offset: int = 0,
     status: MatchStatus | None = None,
     criteria_id: UUID | None = None,
+    favourites_only: bool = False,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_db),
 ):
@@ -61,6 +62,12 @@ def get_feed(
     )
     if status:
         query = query.filter_by(status=status)
+    if favourites_only:
+        # Independent of `status` on purpose — a favourite you've also
+        # marked "applied" should still show up here. See
+        # app/models.py's UserJobMatch.is_favourite for why these two
+        # fields are separate rather than one collapsing into the other.
+        query = query.filter_by(is_favourite=True)
 
     total = query.count()
     items = (
@@ -72,9 +79,9 @@ def get_feed(
 
 
 @router.patch("/matches/{match_id}", response_model=MatchOut)
-def update_match_status(
+def update_match(
     match_id: UUID,
-    payload: MatchStatusUpdate,
+    payload: MatchUpdate,
     user: User = Depends(get_current_user),
     session: Session = Depends(get_db),
 ):
@@ -82,7 +89,16 @@ def update_match_status(
     if not match or match.user_id != user.id:
         raise HTTPException(status_code=404, detail="Match not found")
 
-    match.status = payload.status
+    # Only touch fields the caller actually provided — MatchUpdate
+    # guarantees at least one of these is set, but never assumes both.
+    # This is what makes it safe for the feed card's favourite toggle
+    # to PATCH just {is_favourite: true} without silently resetting
+    # status back to whatever the request happens to default to.
+    if payload.status is not None:
+        match.status = payload.status
+    if payload.is_favourite is not None:
+        match.is_favourite = payload.is_favourite
+
     session.commit()
     session.refresh(match)
     return match

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
+import { Star } from 'lucide-react'
 import { api } from '../lib/api'
 
 const STATUS_ACTIONS = [
@@ -44,6 +45,18 @@ export default function JobDetail() {
     }
   }
 
+  async function toggleFavourite() {
+    const nextValue = !match.is_favourite
+    setMatch((prev) => ({ ...prev, is_favourite: nextValue })) // optimistic — same reasoning as JobFeed.jsx's card toggle
+    try {
+      const updated = await api.patch(`/matches/${matchId}`, { is_favourite: nextValue })
+      setMatch(updated)
+    } catch (e) {
+      setMatch((prev) => ({ ...prev, is_favourite: !nextValue }))
+      setError(e.message)
+    }
+  }
+
   if (!match && !error) {
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center">
@@ -65,7 +78,7 @@ export default function JobDetail() {
     )
   }
 
-  const { job, status } = match
+  const { job, status, is_favourite: isFavourite } = match
   const tags = [job.location_category || job.location, job.contract_type, job.remote_type].filter(Boolean)
 
   return (
@@ -76,8 +89,21 @@ export default function JobDetail() {
         </button>
 
         <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
-          <h1 className="text-lg font-semibold text-slate-900">{job.title}</h1>
-          <p className="text-sm text-slate-500 mt-0.5">{job.company}</p>
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h1 className="text-lg font-semibold text-slate-900">{job.title}</h1>
+              <p className="text-sm text-slate-500 mt-0.5">{job.company}</p>
+            </div>
+            <button
+              type="button"
+              onClick={toggleFavourite}
+              aria-label={isFavourite ? 'Remove from favourites' : 'Add to favourites'}
+              aria-pressed={isFavourite}
+              className="p-1.5 -m-1.5 text-slate-300 hover:text-brand-500 transition-colors shrink-0"
+            >
+              <Star size={22} fill={isFavourite ? 'currentColor' : 'none'} className={isFavourite ? 'text-brand-500' : ''} />
+            </button>
+          </div>
 
           {tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-3">

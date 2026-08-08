@@ -121,6 +121,12 @@ class UserJobMatch(Base):
     matched_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
     notified_at = Column(DateTime(timezone=True))
     status = Column(Text, nullable=False, default="new")
+    # Independent of `status` on purpose — you might favourite something
+    # you've also marked "applied". A fifth status value would force
+    # those two facts to collide into one field; a separate boolean
+    # lets them vary independently, which is what "favourite" actually
+    # means to a user.
+    is_favourite = Column(Boolean, nullable=False, default=False)
 
     user = relationship("User", back_populates="matches")
     job = relationship("Job")

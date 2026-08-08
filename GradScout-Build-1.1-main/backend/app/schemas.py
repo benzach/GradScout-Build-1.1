@@ -12,7 +12,7 @@ from datetime import datetime
 from typing import Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator, model_validator
 
 from app.locations import CANONICAL_LOCATIONS
 from app.industries import CANONICAL_INDUSTRIES
@@ -177,12 +177,27 @@ class MatchOut(BaseModel):
     id: UUID
     job: JobOut
     status: MatchStatus
+    is_favourite: bool
     matched_at: datetime
     notified_at: datetime | None
 
 
-class MatchStatusUpdate(BaseModel):
-    status: MatchStatus
+class MatchUpdate(BaseModel):
+    """
+    Partial update for a match — status and is_favourite can be set
+    independently or together. At least one must be provided; an empty
+    patch is almost certainly a frontend bug, not a legitimate no-op,
+    so it's rejected rather than silently accepted.
+    """
+
+    status: MatchStatus | None = None
+    is_favourite: bool | None = None
+
+    @model_validator(mode="after")
+    def _at_least_one_field(self):
+        if self.status is None and self.is_favourite is None:
+            raise ValueError("Provide at least one of: status, is_favourite")
+        return self
 
 
 class PaginatedFeed(BaseModel):
