@@ -161,6 +161,38 @@ class TestSignupEndpoint:
         assert user.password_hash != "at-least-8-chars"
         assert user.password_hash.startswith("$2")  # bcrypt's own format prefix
 
+    def test_concurrent_signup_race_returns_400_not_500(self):
+        """
+        The pre-check and the insert aren't atomic. Reproduces the real
+        race directly with two separate DB sessions, rather than trying
+        to actually win a timing race through the HTTP client (which
+        can't control transaction timing this precisely, and would be
+        flaky by nature if it tried).
+        """
+        from fastapi import HTTPException
+        from app.routers.auth import signup
+        from app.schemas import SignupRequest
+
+        session_a = get_session()
+        session_b = get_session()
+        try:
+            body = SignupRequest(email="race-condition@example.com", password="at-least-8-chars")
+
+            # Both "requests" pass the pre-check before either commits —
+            # this is the exact window the code needs to survive.
+            assert session_a.query(User).filter_by(email=body.email).first() is None
+            assert session_b.query(User).filter_by(email=body.email).first() is None
+
+            signup(body=body, session=session_b)  # wins the race, commits cleanly
+
+            # session_a still thinks the coast is clear — this must not 500.
+            with pytest.raises(HTTPException) as exc_info:
+                signup(body=body, session=session_a)
+            assert exc_info.value.status_code == 400
+        finally:
+            session_a.close()
+            session_b.close()
+
 
 class TestLoginEndpoint:
     def test_correct_credentials_succeed(self, session):

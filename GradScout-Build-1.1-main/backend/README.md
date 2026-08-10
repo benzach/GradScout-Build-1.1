@@ -103,19 +103,29 @@ needs just to run. Quick reference:
 1. Push this repo to GitHub, create a Railway project from it, and set
    the service's **root directory to `backend`**.
 2. Add a **Postgres** plugin to the same Railway project (New →
-   Database → Add PostgreSQL). Railway wires its `DATABASE_URL` into
-   your web service's environment automatically — nothing to copy by
-   hand.
-3. Run the migrations against that database, in order, from your own
-   machine (Railway's Postgres plugin gives you a connection string
-   under its own "Connect" tab):
+   Database → Add PostgreSQL). This does **not** automatically wire
+   anything into your backend service — Railway requires an explicit
+   reference variable. On the backend service's Variables tab, add
+   `DATABASE_URL` with value `${{Postgres.DATABASE_URL}}` (use your
+   Postgres service's actual name if you renamed it from the default).
+   Skipping this step is exactly how a stale or manually-pasted
+   connection string ends up in `DATABASE_URL` instead — worth
+   double-checking this variable's actual value if anything below ever
+   fails with a database authentication error.
+3. Run the migrations against that same database, in order, from your
+   own machine. Use the Postgres service's own **public** connection
+   string for this (its Variables tab — look for the one with a real
+   external hostname like `*.proxy.rlwy.net`, not
+   `postgres.railway.internal`, which only resolves from inside
+   Railway's network):
    ```bash
-   psql "<railway-postgres-connection-string>" -f migrations/0001_initial_schema.sql
-   psql "<railway-postgres-connection-string>" -f migrations/0002_seed_sources.sql
-   psql "<railway-postgres-connection-string>" -f migrations/0003_add_w4mpjobs_source.sql
-   psql "<railway-postgres-connection-string>" -f migrations/0004_add_location_category.sql
-   psql "<railway-postgres-connection-string>" -f migrations/0005_industry_category.sql
-   psql "<railway-postgres-connection-string>" -f migrations/0006_self_hosted_auth.sql
+   psql "<railway-postgres-public-connection-string>" -f migrations/0001_initial_schema.sql
+   psql "<railway-postgres-public-connection-string>" -f migrations/0002_seed_sources.sql
+   psql "<railway-postgres-public-connection-string>" -f migrations/0003_add_w4mpjobs_source.sql
+   psql "<railway-postgres-public-connection-string>" -f migrations/0004_add_location_category.sql
+   psql "<railway-postgres-public-connection-string>" -f migrations/0005_industry_category.sql
+   psql "<railway-postgres-public-connection-string>" -f migrations/0006_self_hosted_auth.sql
+   psql "<railway-postgres-public-connection-string>" -f migrations/0007_add_favourites.sql
    ```
 4. Add the remaining Railway environment variables: `JWT_SECRET_KEY`
    (generate one with `openssl rand -hex 32` — this is what signs every

@@ -13,6 +13,7 @@ it's a deliberate decision to revisit before a wider launch, not a gap
 someone finds by accident later.
 """
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.auth import get_db
@@ -35,7 +36,16 @@ def signup(body: SignupRequest, session: Session = Depends(get_db)):
 
     user = User(email=body.email, password_hash=hash_password(body.password))
     session.add(user)
-    session.commit()
+    try:
+        session.commit()
+    except IntegrityError:
+        # The check above and this insert aren't atomic — two signups
+        # for the same email arriving close together can both pass the
+        # `existing` check before either commits. Without this,
+        # whichever one loses the race hits the database's own unique
+        # constraint and surfaces as an unhandled 500, not a clean 400.
+        session.rollback()
+        raise HTTPException(status_code=400, detail="Could not create an account with those details")
     session.refresh(user)
 
     token = create_access_token(user.id)
