@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="theme-color" content="#0a2a1c" />
+
+    <!-- iOS treats "installed as a web app" as a distinct mode from
+         "opened in Safari" — these three tags are what make it open
+         full-screen and identify itself correctly once added to the
+         home screen, and are also a prerequisite for push notifications
+         to work on iOS at all. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="GradScout" />
+    <link rel="apple-touch-icon" href="/icon-192.png" />
+
+    <title>GradScout</title>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>
