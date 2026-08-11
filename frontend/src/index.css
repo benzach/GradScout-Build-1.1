@@ -1,0 +1,33 @@
+@import "tailwindcss";
+
+/*
+ * "brand" — referenced throughout Criteria.jsx and MultiSelectDropdown.jsx
+ * (bg-brand-950, text-brand-700, focus:ring-brand-500, etc.) but never
+ * actually defined anywhere in this codebase. A deep, slightly cool
+ * green: distinct from the blue/red already owned by the job boards
+ * GradScout aggregates (LinkedIn, Indeed, Reed), and thematically fits
+ * a graduate-jobs product better than generic SaaS blue — growth, a
+ * fresh start, optimism, without tipping into a neon "eco-app" green.
+ */
+@theme {
+  --color-brand-50: #f0fbf6;
+  --color-brand-100: #dbf4e7;
+  --color-brand-200: #b8e9ce;
+  --color-brand-300: #8ad9ae;
+  --color-brand-400: #57c289;
+  --color-brand-500: #2fa36b;
+  --color-brand-600: #218356;
+  --color-brand-700: #1c6a46;
+  --color-brand-800: #19553a;
+  --color-brand-900: #164630;
+  --color-brand-950: #0a2a1c;
+}
+
+body {
+  /* System font stack, deliberately — not a webfont. Every extra KB
+     matters on a mobile PWA testers are installing over real mobile
+     data, and native-feeling apps typically use the OS's own font
+     rather than importing one, which also avoids first-paint layout
+     shift while a webfont loads. */
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
