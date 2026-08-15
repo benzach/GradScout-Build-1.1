@@ -31,6 +31,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from app.db import get_session
 from app.matching import compute_and_materialize_matches
 from app.models import SearchCriteria, User
+from app.notifications import send_notifications_for_new_matches
 from app.pipeline import run_pipeline
 
 SCRAPE_INTERVAL_MINUTES = int(os.environ.get("SCRAPE_INTERVAL_MINUTES", "20"))
@@ -61,14 +62,22 @@ def run_scheduled_cycle() -> dict:
             row[0] for row in session.query(SearchCriteria.user_id).filter_by(active=True).distinct()
         }
 
+        # Collected across every user in this cycle, then notified
+        # about in one batch at the end — see app/notifications.py's
+        # module docstring for why sending only happens here, never
+        # from GET /feed's call to the same matching function.
+        all_new_matches = []
+
         for user_id in user_ids_with_active_criteria:
             user = session.get(User, user_id)
             if not user:
                 continue
             criteria_list = session.query(SearchCriteria).filter_by(user_id=user_id, active=True).all()
             try:
-                compute_and_materialize_matches(session, user, criteria_list)
+                new_matches = []
+                compute_and_materialize_matches(session, user, criteria_list, new_matches_out=new_matches)
                 summary["users_processed"] += 1
+                all_new_matches.extend(new_matches)
             except Exception as e:
                 # One user's matching logic failing (e.g. a data
                 # oddity in their criteria) shouldn't stop everyone
@@ -77,6 +86,10 @@ def run_scheduled_cycle() -> dict:
                 # per-source handling in Phase 2.
                 print(f"[scheduler] match computation failed for user {user_id}: {e}")
                 summary["match_errors"].append({"user_id": str(user_id), "error": str(e)})
+
+        if all_new_matches:
+            summary["notifications"] = send_notifications_for_new_matches(session, all_new_matches)
+            print(f"[scheduler] notifications: {summary['notifications']}")
 
     except Exception as e:
         print(f"[scheduler] cycle failed entirely: {e}")

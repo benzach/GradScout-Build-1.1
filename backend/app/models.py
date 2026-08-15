@@ -130,3 +130,19 @@ class UserJobMatch(Base):
 
     user = relationship("User", back_populates="matches")
     job = relationship("Job")
+
+
+class PushSubscription(Base):
+    __tablename__ = "push_subscriptions"
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    # Globally unique by construction — the push service itself
+    # generates this URL per-subscription, which is what makes it safe
+    # to upsert on: re-subscribing the same browser naturally replaces
+    # its own row (see app/routers/push.py) rather than accumulating
+    # duplicates every time a service worker resubscribes.
+    endpoint = Column(Text, nullable=False, unique=True)
+    p256dh = Column(Text, nullable=False)
+    auth = Column(Text, nullable=False)
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

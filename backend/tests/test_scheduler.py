@@ -99,10 +99,10 @@ def test_one_users_match_failure_does_not_stop_others(session, disabled_sources)
 
     real_fn = __import__("app.matching", fromlist=["compute_and_materialize_matches"]).compute_and_materialize_matches
 
-    def flaky(session_arg, user_arg, criteria_list):
+    def flaky(session_arg, user_arg, criteria_list, new_matches_out=None):
         if user_arg.id == user_a.id:
             raise RuntimeError("simulated failure for user A")
-        return real_fn(session_arg, user_arg, criteria_list)
+        return real_fn(session_arg, user_arg, criteria_list, new_matches_out=new_matches_out)
 
     with patch("app.scheduler.compute_and_materialize_matches", side_effect=flaky):
         summary = run_scheduled_cycle()
@@ -118,3 +118,43 @@ def test_pipeline_failure_is_captured_not_raised(session):
         summary = run_scheduled_cycle()
 
     assert summary["fatal_error"] == "simulated total pipeline failure"
+
+
+def test_new_match_during_cycle_triggers_a_notification_attempt(session, disabled_sources, monkeypatch):
+    """
+    The actual point of Phase 7: a job matching someone's criteria,
+    found during a scheduler cycle, should result in a real attempted
+    notification — not just a database row. webpush() itself is
+    mocked (see test_notifications.py for its own dedicated coverage);
+    what matters here is proving the scheduler actually wires a fresh
+    match through to app.notifications, which nothing before this test
+    verified end-to-end.
+    """
+    from app.models import PushSubscription
+
+    monkeypatch.setattr("app.notifications.VAPID_PRIVATE_KEY", "fake-key-for-this-test")
+    monkeypatch.setattr("app.notifications.VAPID_SUBJECT_EMAIL", "test@example.com")
+
+    user = User(email="notif-cycle@example.com")
+    session.add(user)
+    session.flush()
+    session.add(PushSubscription(user_id=user.id, endpoint="https://push.example.com/cycle-test", p256dh="k", auth="a"))
+    session.add(SearchCriteria(user_id=user.id, keywords=["analyst"], active=True))
+
+    job = Job(
+        title="Graduate Analyst", normalized_title="graduate analyst",
+        company="Barclays", normalized_company="barclays",
+        location="London", normalized_location="london", location_category="London",
+    )
+    session.add(job)
+    session.commit()
+
+    with patch("app.notifications.webpush") as mock_webpush:
+        summary = run_scheduled_cycle()
+        assert mock_webpush.call_count == 1  # the new match actually reached a real (mocked) send attempt
+
+    assert summary["notifications"]["attempted"] == 1
+    assert summary["notifications"]["sent"] == 1
+
+    match = session.query(UserJobMatch).filter_by(user_id=user.id, job_id=job.id).first()
+    assert match.notified_at is not None

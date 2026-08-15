@@ -18,7 +18,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.routers import auth, criteria, jobs, locations, industries
+from app.routers import auth, criteria, jobs, locations, industries, push
 from app.scheduler import start_scheduler, stop_scheduler
 
 
@@ -63,6 +63,7 @@ app.include_router(criteria.router)
 app.include_router(jobs.router)
 app.include_router(locations.router)
 app.include_router(industries.router)
+app.include_router(push.router)
 
 
 @app.get("/")

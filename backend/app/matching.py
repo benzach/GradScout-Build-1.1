@@ -96,7 +96,9 @@ def filter_jobs_for_any_active_criteria(jobs: list[Job], criteria_list: list[Sea
 CANDIDATE_POOL_WINDOW_DAYS = 60
 
 
-def compute_and_materialize_matches(session, user: User, criteria_list: list[SearchCriteria]) -> list:
+def compute_and_materialize_matches(
+    session, user: User, criteria_list: list[SearchCriteria], new_matches_out: list | None = None
+) -> list:
     """
     Runs matching against recent jobs, ensures a user_job_matches row
     exists for every hit. Returns the matched job IDs.
@@ -108,6 +110,14 @@ def compute_and_materialize_matches(session, user: User, criteria_list: list[Sea
     scheduler runs. Same function, same behavior, two different
     triggers — which is exactly the point of building it this way from
     the start (see the module docstring in app/routers/jobs.py history).
+
+    new_matches_out: an optional list the caller can pass in to be
+    populated with the actual newly-created UserJobMatch rows from this
+    call (not just their job IDs). Added for Phase 7's push
+    notifications — the scheduler needs to know exactly which matches
+    are new THIS cycle in order to notify about only those, while
+    GET /feed (the other caller) has never needed that distinction and
+    is deliberately left untouched by this parameter being optional.
     """
     from datetime import datetime, timedelta, timezone
 
@@ -125,10 +135,13 @@ def compute_and_materialize_matches(session, user: User, criteria_list: list[Sea
     }
     for job_id, matched_criteria in matched.items():
         if job_id not in existing_job_ids:
-            session.add(UserJobMatch(
+            new_match = UserJobMatch(
                 user_id=user.id, job_id=job_id,
                 matched_criteria_id=matched_criteria.id, status="new",
-            ))
+            )
+            session.add(new_match)
+            if new_matches_out is not None:
+                new_matches_out.append(new_match)
     session.commit()
 
     return list(matched.keys())

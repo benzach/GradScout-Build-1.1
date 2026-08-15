@@ -205,3 +205,24 @@ class PaginatedFeed(BaseModel):
     total: int
     limit: int
     offset: int
+
+
+class PushSubscriptionKeys(BaseModel):
+    p256dh: str
+    auth: str
+
+
+class PushSubscriptionCreate(BaseModel):
+    """
+    Matches the browser's own PushSubscription.toJSON() shape exactly
+    (endpoint + keys.p256dh + keys.auth) — the frontend sends this
+    object directly with no reshaping, so this schema's field names and
+    nesting aren't a free choice, they're dictated by the Push API spec.
+    """
+
+    endpoint: str
+    keys: PushSubscriptionKeys
+
+
+class PushSubscriptionDelete(BaseModel):
+    endpoint: str
