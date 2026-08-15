@@ -9,6 +9,15 @@ export default defineConfig({
     tailwindcss(),
     VitePWA({
       registerType: 'autoUpdate',
+      // Phase 7 needs a real push event handler and notificationclick
+      // handler — generateSW mode (used through Stage 3) auto-writes a
+      // service worker with no hook for either. injectManifest mode
+      // uses OUR file (src/sw.js) instead, which vite-plugin-pwa
+      // injects the precache manifest into at build time rather than
+      // generating the whole file itself.
+      strategies: 'injectManifest',
+      srcDir: 'src',
+      filename: 'sw.js',
       includeAssets: ['icon-192.png', 'icon-512.png'],
       manifest: {
         name: 'GradScout',
@@ -23,19 +32,12 @@ export default defineConfig({
           { src: 'icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any maskable' },
         ],
       },
-      workbox: {
-        runtimeCaching: [
-          {
-            // Anything not same-origin as the deployed frontend is the
-            // FastAPI backend (VITE_API_BASE_URL, a different Railway
-            // domain) — never served from cache. A job-alert app
-            // silently showing stale matches would defeat the entire
-            // point of the product.
-            urlPattern: ({ url }) => url.origin !== self.location.origin,
-            handler: 'NetworkOnly',
-          },
-        ],
-      },
+      // No runtimeCaching config here (that was generateSW-only) — but
+      // the cross-origin-API-calls-never-cached property this existed
+      // for is preserved for free: src/sw.js's precacheAndRoute only
+      // ever routes the same-origin build assets listed in its
+      // manifest, so a cross-origin call to the Railway API was never
+      // going to be intercepted by this service worker either way.
     }),
   ],
 })

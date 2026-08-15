@@ -2,11 +2,14 @@ import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
+import { enablePushNotifications, getNotificationPermissionState } from '../lib/push'
 
 export default function Home() {
   const [criteria, setCriteria] = useState(null) // null = still loading
   const [matchTotal, setMatchTotal] = useState(null)
   const [error, setError] = useState('')
+  const [pushError, setPushError] = useState('')
+  const [pushState, setPushState] = useState('unsupported') // 'unsupported' | 'default' | 'granted' | 'denied' | 'enabling'
   const { signOut, user } = useAuth()
   const navigate = useNavigate()
 
@@ -34,9 +37,25 @@ export default function Home() {
     }
   }, [criteria])
 
+  useEffect(() => {
+    setPushState(getNotificationPermissionState())
+  }, [])
+
   function handleSignOut() {
     signOut()
     navigate('/login')
+  }
+
+  async function handleEnablePush() {
+    setPushError('')
+    setPushState('enabling')
+    try {
+      await enablePushNotifications()
+      setPushState('granted')
+    } catch (e) {
+      setPushError(e.message)
+      setPushState(getNotificationPermissionState())
+    }
   }
 
   return (
@@ -75,6 +94,38 @@ export default function Home() {
                 : `${criteria.length} saved search${criteria.length === 1 ? '' : 'es'}`}
           </p>
         </button>
+
+        {pushState !== 'unsupported' && (
+          <div className="w-full bg-white rounded-2xl shadow-sm p-5 mt-3">
+            <p className="text-sm font-medium text-slate-900">Notifications</p>
+
+            {pushState === 'granted' ? (
+              <p className="text-xs text-slate-500 mt-1">
+                You'll be notified the moment a new job matches your search.
+              </p>
+            ) : pushState === 'denied' ? (
+              <p className="text-xs text-slate-500 mt-1">
+                Notifications are blocked for this app — enable them in your browser or phone's
+                settings to turn this on.
+              </p>
+            ) : (
+              <>
+                <p className="text-xs text-slate-500 mt-1 mb-3">
+                  Get notified the moment a new job matches your search, even when the app isn't open.
+                </p>
+                <button
+                  onClick={handleEnablePush}
+                  disabled={pushState === 'enabling'}
+                  className="text-sm px-4 py-2 rounded-lg bg-brand-950 text-white font-medium hover:bg-brand-900 transition-colors disabled:opacity-50"
+                >
+                  {pushState === 'enabling' ? 'Enabling…' : 'Enable notifications'}
+                </button>
+              </>
+            )}
+
+            {pushError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mt-3">{pushError}</p>}
+          </div>
+        )}
       </div>
     </div>
   )
