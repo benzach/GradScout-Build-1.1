@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
@@ -100,6 +100,12 @@ export default function Login() {
             No email confirmation needed — you'll be signed in right away.
           </p>
         )}
+
+        <p className="text-xs text-slate-400 text-center mt-3">
+          <Link to="/privacy" className="underline hover:text-slate-600">
+            Privacy Notice
+          </Link>
+        </p>
       </div>
     </div>
   )

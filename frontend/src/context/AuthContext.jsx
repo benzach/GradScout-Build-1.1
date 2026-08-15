@@ -49,8 +49,18 @@ export function AuthProvider({ children }) {
     setUser(null)
   }
 
+  async function deleteAccount(password) {
+    await api.delete('/auth/me', { password })
+    // No separate signOut() call needed — the account (and its token)
+    // are already gone server-side the instant this resolves, so this
+    // just clears the same local state signOut() would.
+    clearToken()
+    localStorage.removeItem(USER_KEY)
+    setUser(null)
+  }
+
   return (
-    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut }}>
+    <AuthContext.Provider value={{ user, loading, signUp, signIn, signOut, deleteAccount }}>
       {children}
     </AuthContext.Provider>
   )

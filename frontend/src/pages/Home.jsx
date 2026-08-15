@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { api } from '../lib/api'
 import { useAuth } from '../context/AuthContext'
 import { enablePushNotifications, getNotificationPermissionState } from '../lib/push'
@@ -10,7 +10,11 @@ export default function Home() {
   const [error, setError] = useState('')
   const [pushError, setPushError] = useState('')
   const [pushState, setPushState] = useState('unsupported') // 'unsupported' | 'default' | 'granted' | 'denied' | 'enabling'
-  const { signOut, user } = useAuth()
+  const [confirmingDelete, setConfirmingDelete] = useState(false)
+  const [deletePassword, setDeletePassword] = useState('')
+  const [deleteError, setDeleteError] = useState('')
+  const [deleting, setDeleting] = useState(false)
+  const { signOut, deleteAccount, user } = useAuth()
   const navigate = useNavigate()
 
   useEffect(() => {
@@ -55,6 +59,18 @@ export default function Home() {
     } catch (e) {
       setPushError(e.message)
       setPushState(getNotificationPermissionState())
+    }
+  }
+
+  async function handleDeleteAccount() {
+    setDeleteError('')
+    setDeleting(true)
+    try {
+      await deleteAccount(deletePassword)
+      navigate('/login')
+    } catch (e) {
+      setDeleteError(e.message)
+      setDeleting(false)
     }
   }
 
@@ -126,6 +142,57 @@ export default function Home() {
             {pushError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mt-3">{pushError}</p>}
           </div>
         )}
+
+        <div className="mt-8 pt-4 border-t border-slate-200">
+          {!confirmingDelete ? (
+            <div className="flex items-center justify-between">
+              <Link to="/privacy" className="text-xs text-slate-400 underline hover:text-slate-600">
+                Privacy Notice
+              </Link>
+              <button
+                onClick={() => setConfirmingDelete(true)}
+                className="text-xs text-slate-400 hover:text-red-600"
+              >
+                Delete my account
+              </button>
+            </div>
+          ) : (
+            <div className="bg-white rounded-2xl shadow-sm p-5">
+              <p className="text-sm font-medium text-slate-900">Delete your account?</p>
+              <p className="text-xs text-slate-500 mt-1 mb-3">
+                This permanently deletes your account, saved searches, and match history. There's
+                no undo. Enter your password to confirm.
+              </p>
+              <input
+                type="password"
+                value={deletePassword}
+                onChange={(e) => setDeletePassword(e.target.value)}
+                placeholder="Your password"
+                className="w-full px-3.5 py-2.5 rounded-lg border border-slate-200 text-sm text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-red-500 focus:border-transparent mb-3"
+              />
+              {deleteError && <p className="text-xs text-red-600 bg-red-50 rounded-lg px-3 py-2 mb-3">{deleteError}</p>}
+              <div className="flex gap-2">
+                <button
+                  onClick={() => {
+                    setConfirmingDelete(false)
+                    setDeletePassword('')
+                    setDeleteError('')
+                  }}
+                  className="flex-1 text-sm py-2 rounded-lg border border-slate-200 text-slate-600 hover:bg-slate-50 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handleDeleteAccount}
+                  disabled={deleting || !deletePassword}
+                  className="flex-1 text-sm py-2 rounded-lg bg-red-600 text-white font-medium hover:bg-red-700 transition-colors disabled:opacity-50"
+                >
+                  {deleting ? 'Deleting…' : 'Delete permanently'}
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )
