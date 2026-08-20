@@ -21,7 +21,7 @@ export default function Privacy() {
               GradScout is a small, independently-run project, currently being tested by a closed
               group of people who were personally invited.{' '}
               <span className="italic text-slate-400">
-                [Replace this line with your name and a real contact email before inviting testers.]
+                
               </span>
             </p>
           </Section>
