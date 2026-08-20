@@ -16,9 +16,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from app.auth import get_db
+from app.auth import get_current_user, get_db
 from app.models import User
-from app.schemas import LoginRequest, SignupRequest, TokenResponse, UserOut
+from app.schemas import AccountDeleteRequest, LoginRequest, SignupRequest, TokenResponse, UserOut
 from app.security import create_access_token, hash_password, verify_password
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -63,3 +63,24 @@ def login(body: LoginRequest, session: Session = Depends(get_db)):
 
     token = create_access_token(user.id)
     return TokenResponse(access_token=token, user=UserOut.model_validate(user))
+
+
+@router.delete("/me", status_code=204)
+def delete_account(
+    body: AccountDeleteRequest,
+    user: User = Depends(get_current_user),
+    session: Session = Depends(get_db),
+):
+    """
+    Real, immediate, self-serve deletion — not a support-ticket
+    promise. Deleting the users row cascades to search_criteria,
+    user_job_matches, and push_subscriptions automatically (see each
+    table's own ON DELETE CASCADE in their migrations), so this one
+    delete genuinely removes everything tied to the account in a
+    single transaction, not just the login itself.
+    """
+    if not verify_password(body.password, user.password_hash):
+        raise HTTPException(status_code=401, detail="Incorrect password")
+
+    session.delete(user)
+    session.commit()

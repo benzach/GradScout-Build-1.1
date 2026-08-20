@@ -56,6 +56,15 @@ class LoginRequest(BaseModel):
     password: str = Field(min_length=1, max_length=72)
 
 
+class AccountDeleteRequest(BaseModel):
+    # Requiring the password again (not just a valid token) matters
+    # specifically for a destructive, irreversible action — it's the
+    # difference between "anyone with access to an already-open
+    # browser tab can delete this account" and "only someone who
+    # actually knows the password can".
+    password: str = Field(min_length=1, max_length=72)
+
+
 class UserOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

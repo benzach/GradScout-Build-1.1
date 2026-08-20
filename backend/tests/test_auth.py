@@ -209,3 +209,97 @@ class TestLoginEndpoint:
     def test_nonexistent_email_rejected(self, session):
         r = client.post("/auth/login", json={"email": "nobody@example.com", "password": "whatever123"})
         assert r.status_code == 401
+
+
+class TestAccountDeletion:
+    def test_wrong_password_rejected(self, session):
+        r = client.post("/auth/signup", json={"email": "delete1@example.com", "password": "correct-password"})
+        token = r.json()["access_token"]
+
+        r = client.request(
+            "DELETE", "/auth/me", json={"password": "wrong-password"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 401
+        # Still there — a rejected deletion must not have deleted anything.
+        assert session.query(User).filter_by(email="delete1@example.com").count() == 1
+
+    def test_correct_password_deletes_account(self, session):
+        r = client.post("/auth/signup", json={"email": "delete2@example.com", "password": "correct-password"})
+        token = r.json()["access_token"]
+
+        r = client.request(
+            "DELETE", "/auth/me", json={"password": "correct-password"},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert r.status_code == 204
+        assert session.query(User).filter_by(email="delete2@example.com").count() == 0
+
+    def test_deletion_cascades_to_everything(self, session):
+        """
+        The actual point of this feature: a privacy notice promising
+        "delete everything" is only true if this cascade genuinely
+        works, not just the login row. Proven directly against the
+        real tables here rather than assumed from the migrations'
+        ON DELETE CASCADE alone.
+        """
+        from app.models import Job, JobSource, PushSubscription, SearchCriteria, UserJobMatch
+
+        # This file's own `session` fixture only cleans up Users (its
+        # other tests never touch jobs) — but /feed matches against
+        # every Job currently in the shared dev database, and a broad
+        # "graduate" keyword can otherwise pick up leftover rows from
+        # other test files run earlier in the same session.
+        session.query(UserJobMatch).delete()
+        session.query(JobSource).delete()
+        session.query(Job).delete()
+        session.commit()
+
+        r = client.post("/auth/signup", json={"email": "delete3@example.com", "password": "correct-password"})
+        token = r.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+        user_id = r.json()["user"]["id"]
+
+        client.post("/criteria", json={"keywords": ["graduate"]}, headers=headers)
+
+        job = Job(
+            title="Graduate Analyst", normalized_title="graduate analyst",
+            company="Barclays", normalized_company="barclays",
+            location="London", normalized_location="london", location_category="London",
+        )
+        session.add(job)
+        session.flush()
+        session.add(JobSource(job_id=job.id, site="adzuna", source_url="https://example.com/1", raw_title="x"))
+        session.commit()
+        client.get("/feed", headers=headers)  # materializes a real UserJobMatch row
+
+        client.post(
+            "/push/subscriptions",
+            json={"endpoint": "https://push.example.com/delete-test", "keys": {"p256dh": "a", "auth": "b"}},
+            headers=headers,
+        )
+
+        assert session.query(SearchCriteria).filter_by(user_id=user_id).count() == 1
+        assert session.query(UserJobMatch).filter_by(user_id=user_id).count() == 1
+        assert session.query(PushSubscription).filter_by(user_id=user_id).count() == 1
+
+        r = client.request("DELETE", "/auth/me", json={"password": "correct-password"}, headers=headers)
+        assert r.status_code == 204
+
+        assert session.query(SearchCriteria).filter_by(user_id=user_id).count() == 0
+        assert session.query(UserJobMatch).filter_by(user_id=user_id).count() == 0
+        assert session.query(PushSubscription).filter_by(user_id=user_id).count() == 0
+
+    def test_requires_auth(self):
+        r = client.request("DELETE", "/auth/me", json={"password": "whatever"})
+        assert r.status_code == 401
+
+    def test_deleted_token_no_longer_works(self, session):
+        r = client.post("/auth/signup", json={"email": "delete4@example.com", "password": "correct-password"})
+        token = r.json()["access_token"]
+        headers = {"Authorization": f"Bearer {token}"}
+
+        client.request("DELETE", "/auth/me", json={"password": "correct-password"}, headers=headers)
+
+        r = client.get("/criteria", headers=headers)
+        assert r.status_code == 401  # the same token can't be reused once the account it belongs to is gone
