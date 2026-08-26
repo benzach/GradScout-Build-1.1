@@ -2,7 +2,6 @@ import { Link } from 'react-router-dom'
 import {
   Bell,
   Filter,
-  GitMerge,
   Mail,
   ShieldCheck,
   Star,
@@ -17,12 +16,12 @@ const STEPS = [
   {
     number: '01',
     title: "Tell us what you're after",
-    body: "Keywords to include and exclude, specific locations, industries, a minimum salary, contract type — set up as many saved searches as you like, and change any of them whenever your search changes.",
+    body: "Choose to filter by locations, industries, salary, contract type, or key words. Set up as many saved searches as you like.",
   },
   {
     number: '02',
     title: 'We scan, continuously',
-    body: 'A background scan runs across every source roughly every 20 minutes, checking for anything new — and folding in anything that turns out to be a re-listing of a role already in your feed.',
+    body: 'GradScout scans across all sources finding you jobs that match your criteria, and notifying you whenever a new listing is found.',
   },
   {
     number: '03',
@@ -32,11 +31,6 @@ const STEPS = [
 ]
 
 const FEATURES = [
-  {
-    icon: GitMerge,
-    title: 'Duplicate listings, merged',
-    body: 'The same role posted across several boards gets folded into one match — not counted (or shown to you) six times over.',
-  },
   {
     icon: Filter,
     title: 'Search exactly what you mean',
@@ -59,8 +53,8 @@ const FEATURES = [
   },
   {
     icon: ShieldCheck,
-    title: 'No ads, nothing sold',
-    body: 'No ad tracking and no data sold on — just what GradScout needs to match and notify you. Delete your account any time, in full.',
+    title: 'Completely free, always',
+    body: "No subscription, no premium tier, no catch — GradScout doesn't charge for search, matching, or notifications, and it never will.",
   },
 ]
 
@@ -68,14 +62,13 @@ const SOURCES = [
   { name: 'Adzuna', body: 'General graduate & entry-level job search aggregator.' },
   { name: 'Reed', body: "One of the UK's largest job boards." },
   { name: 'Jooble', body: 'International job search engine, active across the UK.' },
-  { name: 'w4mpjobs', body: 'Specialist board for political and public affairs roles.' },
 ]
 
 const FAQ_ITEMS = [
   {
     question: 'Is GradScout free to use?',
     answer:
-      "Yes — GradScout is free to use while it's in early access. There's no paid tier hiding a better version of the feed.",
+      "Yes — GradScout is completely free, and always will be. There's no paid tier hiding a better version of the feed.",
   },
   {
     question: 'How is this different from just checking Indeed or LinkedIn myself?',
@@ -100,7 +93,7 @@ const FAQ_ITEMS = [
   {
     question: 'What happens to my data?',
     answer:
-      'Only what GradScout needs to run your search — see the full Privacy Notice for the exact list. Nothing is sold or used for ad-tracking, and you can permanently delete your account, and everything tied to it, at any time from Settings.',
+      'Only what GradScout needs to run your search — see the full Privacy Notice for the exact list of what\'s collected and why. You can permanently delete your account, and everything tied to it, at any time from Settings.',
   },
   {
     question: 'Is GradScout finished?',
@@ -131,11 +124,10 @@ function Hero() {
             Early access · UK graduate &amp; entry-level roles
           </p>
           <h1 className="font-heading text-[2.5rem] leading-[1.05] sm:text-6xl sm:leading-[1.05] font-extrabold text-primary-900 tracking-tight">
-            Stop scrolling six job boards for the same three roles.
+            Graduate job hunting is hard. GradScout makes it simpler.
           </h1>
           <p className="text-lg text-primary-600 mt-6 leading-relaxed max-w-lg">
-            GradScout scans the UK's graduate job boards on a timer, merges the listings that turn
-            out to be duplicates, and matches what's left against exactly what you're looking for.
+            Graduate jobs. Matched to your criteria. All in one place, completely free.
           </p>
           <div className="flex flex-col sm:flex-row gap-3 mt-8">
             <Link
@@ -153,7 +145,7 @@ function Hero() {
             </a>
           </div>
           <p className="text-xs text-primary-400 mt-4">
-            No card required. Free to use while GradScout is in early access.
+            No card required. GradScout is completely free, and always will be.
           </p>
         </Reveal>
 
@@ -235,7 +227,7 @@ function Sources() {
           </p>
         </Reveal>
 
-        <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4 mt-12">
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-12 max-w-4xl">
           {SOURCES.map((source, i) => (
             <Reveal key={source.name} delayMs={i * 90}>
               <div className="bg-primary-800 border border-primary-700 rounded-2xl p-5 h-full">
