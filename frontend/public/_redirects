@@ -1,0 +1,8 @@
+# SPA fallback for Netlify — mirrors what vercel.json's "rewrites" does
+# for Vercel. Netlify already serves an existing static file (icons,
+# robots.txt, sw.js, the /assets bundle) before falling through to this
+# rule, so a single catch-all is enough; no need to list exclusions.
+#
+# Only relevant if you deploy to Netlify instead of Vercel — harmless
+# and unused otherwise.
+/*  /index.html  200

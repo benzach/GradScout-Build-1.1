@@ -1,0 +1,114 @@
+@import "tailwindcss";
+
+/* Self-hosted (not Google Fonts CDN) so the two weights actually used
+   (headings: 700/800; body: 400/500/600 for emphasis) are part of the
+   Vite build output and get swept into the PWA's precache manifest by
+   vite-plugin-pwa (see src/sw.js) same as every other asset — the app
+   still renders correctly offline, and there's no third-party font
+   request on every cold load.
+
+   Imported via the `latin` subset specifically (not the default,
+   which pulls in cyrillic/greek/vietnamese/latin-ext too) — GradScout
+   is UK-only and English-only, so those other subsets are pure dead
+   weight. This alone cuts the font payload from ~350KB to ~35KB. */
+@import "@fontsource/inter/latin-400.css";
+@import "@fontsource/inter/latin-500.css";
+@import "@fontsource/inter/latin-600.css";
+@import "@fontsource/plus-jakarta-sans/latin-700.css";
+@import "@fontsource/plus-jakarta-sans/latin-800.css";
+
+/*
+ * Brand palette. Built around four fixed hexes from the brand brief —
+ * every shade below is a tint/shade of one of those four anchors, not
+ * a freely-chosen scale, so `bg-primary-900` etc. always resolves back
+ * to a colour the brief actually specified rather than something
+ * adjacent to it.
+ *
+ * Follows a 60/30/10 split:
+ *   60% --color-background  (#F3F5F9) — the app's base canvas
+ *   30% --color-primary-*   (#3A405A, headings/body/nav) and
+ *       --color-secondary-* (#AEC5EB, cards/surfaces/highlights)
+ *   10% --color-accent-*    (#E0A96D) — reserved for buttons, star
+ *       ratings, and toggles; never used for large fills or body text
+ *
+ * Contrast note: --color-primary-900 (#3A405A) on --color-background
+ * (#F3F5F9) is ~8.3:1 — comfortably passes WCAG AA (and AAA) for text
+ * at any size. --color-secondary-* is deliberately never used for body
+ * copy (light blues fail small-text contrast) — it's a surface/fill
+ * colour, paired with primary-900 text on top of it, not a text colour
+ * itself.
+ */
+@theme {
+  /* Primary — #3A405A. High-contrast headings/body text, back button,
+     nav/tab bar, primary form buttons. primary-600 (#4B526E) is the
+     brief's specified "slightly lighter" alternative for regular body
+     copy that sits under a primary-900 heading. */
+  --color-primary-50: #f3f5f9;
+  --color-primary-100: #e3e6ef;
+  --color-primary-200: #c7cce0;
+  --color-primary-300: #a3aac8;
+  --color-primary-400: #7b83a8;
+  --color-primary-500: #5c6488;
+  --color-primary-600: #4b526e;
+  --color-primary-700: #40465f;
+  --color-primary-800: #3a405a;
+  --color-primary-900: #3a405a;
+  --color-primary-950: #262a3c;
+
+  /* Secondary — #AEC5EB. Card/surface fills, feature highlights,
+     selected states, illustration accents. Never used for text. */
+  --color-secondary-50: #f5f8fd;
+  --color-secondary-100: #eaf0fa;
+  --color-secondary-200: #d7e3f4;
+  --color-secondary-300: #aec5eb;
+  --color-secondary-400: #93b2e2;
+  --color-secondary-500: #789ed8;
+  --color-secondary-600: #5d84c4;
+  --color-secondary-700: #4a6aa3;
+  --color-secondary-800: #3d5583;
+  --color-secondary-900: #34456a;
+
+  /* Accent/CTA — #E0A96D. The 10%: reserved strictly for clickable
+     buttons, primary actions, star ratings, and toggle switches — the
+     one colour in this palette that should always mean "you can tap
+     this". Never used for passive/decorative fills. */
+  --color-accent-50: #fdf7f0;
+  --color-accent-100: #faebd9;
+  --color-accent-200: #f3d3ab;
+  --color-accent-300: #e0a96d;
+  --color-accent-400: #d99a54;
+  --color-accent-500: #cc8a3f;
+  --color-accent-600: #b07531;
+  --color-accent-700: #8c5c26;
+  --color-accent-800: #6b461e;
+  --color-accent-900: #4f3417;
+
+  --color-background: #f3f5f9;
+
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-heading: "Plus Jakarta Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+html {
+  /* Powers the marketing header/footer's #how-it-works-style anchor
+     links. Scoped to `html` rather than added per-element since it's a
+     one-line, no-JS way to cover every in-page anchor at once. */
+  scroll-behavior: smooth;
+  scroll-padding-top: 4.5rem; /* clears the sticky marketing header */
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--color-background);
+  color: var(--color-primary-900);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-heading);
+}

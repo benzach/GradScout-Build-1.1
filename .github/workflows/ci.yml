@@ -1,0 +1,102 @@
+name: CI
+
+# Runs on every push/PR: backend tests against a real throwaway
+# Postgres (spun up as a service container, migrated fresh each run
+# using the exact same `for f in migrations/*.sql` loop documented in
+# backend/README.md — so this can never drift from what a real local
+# or Railway setup does), plus a frontend production build. Neither job
+# deploys anything; this is purely "does it still work" on every push.
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: gradscout
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: gradscout_ci
+        ports:
+          - 5432:5432
+        # Migrations run immediately after this job starts - without a
+        # health check, they'd race a Postgres container that's still
+        # starting up and fail intermittently rather than reliably.
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      DATABASE_URL: postgresql://gradscout:ci@localhost:5432/gradscout_ci
+      JWT_SECRET_KEY: ci-only-throwaway-secret-not-used-anywhere-real
+      DISABLE_SCHEDULER: "true"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Apply migrations
+        run: |
+          for f in migrations/*.sql; do
+            echo "Applying $f"
+            psql "$DATABASE_URL" -f "$f"
+          done
+
+      - name: Run tests
+        run: pytest tests/ -v
+
+  frontend:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Work around npm optional-dependencies bug (rollup native binary)
+        # Hit this exact issue in testing this same change: npm has a
+        # known bug (npm/cli#4828) where optional dependencies -
+        # specifically Rollup's platform-native binary - sometimes
+        # don't get installed even from a clean `npm ci`, causing the
+        # build to fail with "Cannot find module
+        # @rollup/rollup-linux-x64-gnu". Harmless no-op if npm already
+        # installed it correctly.
+        run: npm install @rollup/rollup-linux-x64-gnu --no-save
+
+      - name: Production build
+        # A real URL isn't needed for the build itself to succeed - only
+        # for the app to actually reach a backend once running - but
+        # Vite still needs SOME value here, or import.meta.env picks up
+        # nothing and every API call silently resolves to a broken URL
+        # at runtime instead of failing loudly at build time.
+        env:
+          VITE_API_BASE_URL: https://ci-build-placeholder.invalid
+        run: npm run build
