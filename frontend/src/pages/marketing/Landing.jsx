@@ -170,7 +170,7 @@ function HowItWorks() {
         <Reveal className="max-w-xl">
           <p className="text-xs font-semibold uppercase tracking-widest text-primary-400 mb-3">How it works</p>
           <h2 className="font-heading text-3xl sm:text-4xl font-extrabold text-primary-900 tracking-tight">
-            Three steps
+            Three simple steps
           </h2>
         </Reveal>
 
@@ -228,7 +228,7 @@ function Sources() {
           </h2>
           <p className="text-primary-200 mt-4 leading-relaxed">
             GradScout uses official job board sources rather than screen-scraping personal sites.
-            Every listing takes you straight to where it was originally posted — you always apply
+            Every listing takes you straight to where it was originally posted - you always apply
             on the real site, never inside GradScout.
           </p>
         </Reveal>
