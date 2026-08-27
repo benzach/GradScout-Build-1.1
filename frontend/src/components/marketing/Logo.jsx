@@ -4,10 +4,12 @@ import { Link } from 'react-router-dom'
  * Reuses the real app icon (public/icon-*.png — the same mark used for
  * the browser favicon, PWA home-screen icon, and push notifications)
  * rather than redrawing it, so the site nav/footer and the installed
- * app always show the exact same mark. Rounded here via CSS since the
- * source PNGs are delivered full-bleed square (maskable-icon
- * convention — the OS applies its own mask shape on Android, so the
- * file itself carries no baked-in corner radius to match).
+ * app always show the exact same mark: a pair of binoculars, on brand
+ * for a "scout" that looks for jobs on your behalf. Rounded here via
+ * CSS since the source PNGs are delivered full-bleed square
+ * (maskable-icon convention — the OS applies its own mask shape on
+ * Android, so the file itself carries no baked-in corner radius to
+ * match).
  */
 export function Mark({ size = 32, className = '' }) {
   return (

@@ -2,9 +2,9 @@ import { Link } from 'react-router-dom'
 import {
   Bell,
   Filter,
+  GraduationCap,
   Mail,
   ShieldCheck,
-
   Star,
   ArrowRight,
 } from 'lucide-react'
@@ -58,7 +58,7 @@ const FEATURES = [
     body: "No subscription, no premium tier, no catch - GradScout will never charge for search, matching, or notifications.",
   },
   {
-    icon: ShieldCheck,
+    icon: GraduationCap,
     title: 'For students, by students',
     body: "GradScout is owned and founded by students; our priority is always to help graduates succeed.",
   },
