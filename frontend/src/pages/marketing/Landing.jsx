@@ -77,11 +77,6 @@ const FAQ_ITEMS = [
       "Yes - GradScout is completely free, and always will be. There's no paid tier hiding a better version of the feed.",
   },
   {
-    question: 'How is this different from just checking Indeed or LinkedIn myself?',
-    answer:
-      "Those are just some of the places grad roles get posted. GradScout pulls listings from several job board sources, merges the ones that turn out to be the same underlying role, and matches what's left against your saved criteria - so you check one feed instead of several tabs, without having to work out yourself whether a listing is new or something you've already seen.",
-  },
-  {
     question: 'Which locations and industries does it cover?',
     answer:
       'The whole of the UK; from the big cities to smaller towns; across industries including law, finance, technology, engineering, consulting, charity & nonprofit, and more. You choose which ones matter when you set up a search.',
